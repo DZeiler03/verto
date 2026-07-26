@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=Verto
+GenericName=Offline File Converter
+Comment=Offline file converter powered by Morphix (FileForge UI)
+Exec=verto
+Icon=verto
+Terminal=false
+Type=Application
+Categories=Office;Utility;Graphics;
+Keywords=convert;pdf;image;offline;morphix;
+StartupNotify=true
