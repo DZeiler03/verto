@@ -5,10 +5,10 @@ from __future__ import annotations
 import math
 
 from PySide6.QtCore import Property, QEasingCurve, QPropertyAnimation, QTimer, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QPainter, QPen, QTransform
+from PySide6.QtGui import QColor, QLinearGradient, QPainter, QPen
 from PySide6.QtWidgets import QWidget
 
-from ui.fileforge.theme import EMBER, HAMMER, SPARK
+from ui.fileforge.theme import ScenePalette, ThemeMode, palette_for
 
 
 class HammerOverlay(QWidget):
@@ -20,10 +20,11 @@ class HammerOverlay(QWidget):
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self._angle = -40.0  # degrees; more negative = raised
-        self._spark = 0.0  # 0..1 spark intensity
+        self._angle = -40.0
+        self._spark = 0.0
         self._visible_anim = False
         self._looping = False
+        self._palette: ScenePalette = palette_for(ThemeMode.FORGE)
 
         self._anim = QPropertyAnimation(self, b"angle", self)
         self._anim.setDuration(280)
@@ -39,6 +40,10 @@ class HammerOverlay(QWidget):
         self._loop_timer.timeout.connect(self._loop_strike)
 
         self.hide()
+
+    def set_theme(self, mode: ThemeMode | str) -> None:
+        self._palette = palette_for(mode)
+        self.update()
 
     def get_angle(self) -> float:
         return self._angle
@@ -59,7 +64,6 @@ class HammerOverlay(QWidget):
     spark = Property(float, get_spark, set_spark)
 
     def start_loop(self) -> None:
-        """Loop hammer strikes until stop_with_finale()."""
         self._looping = True
         self._visible_anim = True
         self.show()
@@ -68,7 +72,6 @@ class HammerOverlay(QWidget):
         self._loop_timer.start()
 
     def stop_with_finale(self, success: bool = True) -> None:
-        """Stop the loop and play a final impact (with sparks on success)."""
         self._looping = False
         self._loop_timer.stop()
         self._visible_anim = True
@@ -138,45 +141,71 @@ class HammerOverlay(QWidget):
     def paintEvent(self, event) -> None:  # noqa: N802
         if not self._visible_anim and self._spark <= 0:
             return
+        pal = self._palette
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        w, h = self.width(), self.height()
-        # Pivot near top-center of anvil face
+        w, h = float(self.width()), float(self.height())
         cx, cy = w * 0.55, h * 0.18
 
         painter.save()
         painter.translate(cx, cy)
         painter.rotate(self._angle)
 
-        # Handle
-        painter.setPen(QPen(QColor("#5D4037"), 6, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        # Wooden handle with rings
+        handle_pen = QPen(QColor(pal.wood), 7, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
+        painter.setPen(handle_pen)
         painter.drawLine(0, 0, 0, int(h * 0.28))
+        painter.setPen(QPen(QColor(pal.wood).darker(120), 1))
+        for t in (0.08, 0.16, 0.22):
+            y = int(h * t)
+            painter.drawLine(-3, y, 3, y)
 
-        # Head
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor(HAMMER))
-        head_w, head_h = w * 0.14, h * 0.08
-        painter.drawRoundedRect(int(-head_w * 0.35), int(h * 0.24), int(head_w), int(head_h), 3, 3)
+        # Metal head with gradient
+        head_w, head_h = w * 0.15, h * 0.085
+        head_grad = QLinearGradient(-head_w * 0.35, h * 0.24, head_w * 0.65, h * 0.32)
+        head_grad.setColorAt(0.0, QColor(pal.metal_light))
+        head_grad.setColorAt(0.5, QColor(pal.metal_mid))
+        head_grad.setColorAt(1.0, QColor(pal.metal_dark))
+        painter.setPen(QPen(QColor(pal.metal_edge), 1))
+        painter.setBrush(head_grad)
+        painter.drawRoundedRect(
+            int(-head_w * 0.35),
+            int(h * 0.24),
+            int(head_w),
+            int(head_h),
+            3,
+            3,
+        )
         # Peen
-        painter.setBrush(QColor("#9E9E9E"))
-        painter.drawEllipse(int(-head_w * 0.45), int(h * 0.25), int(head_h), int(head_h * 0.8))
+        painter.setBrush(QColor(pal.metal_mid))
+        painter.drawEllipse(
+            int(-head_w * 0.48),
+            int(h * 0.25),
+            int(head_h),
+            int(head_h * 0.85),
+        )
 
         painter.restore()
 
-        # Sparks at impact point
+        # Sparks at impact
         if self._spark > 0.05:
             impact_x, impact_y = w * 0.48, h * 0.42
             painter.setPen(Qt.PenStyle.NoPen)
-            for i in range(8):
-                ang = (i / 8.0) * math.pi * 2 + self._spark
-                dist = 12 + (1.0 - self._spark) * 28
+            for i in range(10):
+                ang = (i / 10.0) * math.pi * 2 + self._spark * 2
+                dist = 10 + (1.0 - self._spark) * 32
                 sx = impact_x + math.cos(ang) * dist
-                sy = impact_y + math.sin(ang) * dist * 0.6
-                r = 2 + self._spark * 3
-                color = QColor(SPARK if i % 2 == 0 else EMBER)
-                color.setAlphaF(self._spark)
+                sy = impact_y + math.sin(ang) * dist * 0.55
+                r = 1.5 + self._spark * 3.5
+                color = QColor(pal.ember if i % 2 == 0 else pal.flame_mid)
+                color.setAlphaF(min(1.0, self._spark * 1.1))
                 painter.setBrush(color)
                 painter.drawEllipse(int(sx - r), int(sy - r), int(r * 2), int(r * 2))
+            # Brief flash
+            flash = QColor(pal.flame_core)
+            flash.setAlphaF(self._spark * 0.35)
+            painter.setBrush(flash)
+            painter.drawEllipse(int(impact_x - 12), int(impact_y - 8), 24, 16)
 
         painter.end()

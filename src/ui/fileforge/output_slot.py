@@ -2,27 +2,26 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
-from PySide6.QtCore import Qt, Signal, QRectF
-from PySide6.QtGui import QColor, QFont, QPainter, QPen
+from PySide6.QtCore import QRectF, Qt, Signal
+from PySide6.QtGui import QColor, QFont, QLinearGradient, QPainter, QPen
 from PySide6.QtWidgets import QPushButton, QSizePolicy, QVBoxLayout, QWidget
 
-from ui.fileforge.theme import ASH, EMBER, ERROR, SPARK, STEEL, SUCCESS
+from ui.fileforge.theme import ScenePalette, ThemeMode, palette_for
 
 
 class OutputSlot(QWidget):
-    """Minecraft-style result slot: forged item + Download button."""
+    """Result slot: forged item + Download buttons."""
 
     download_clicked = Signal()
     download_all_clicked = Signal()
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
-        self.setMinimumSize(160, 180)
-        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.setMinimumSize(160, 190)
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
+        self._palette: ScenePalette = palette_for(ThemeMode.FORGE)
 
-        self._state = "empty"  # empty | ready | error | downloaded
+        self._state = "empty"
         self._label = ""
         self._detail = ""
         self._ext = ""
@@ -42,6 +41,10 @@ class OutputSlot(QWidget):
         self.download_all_btn.setEnabled(False)
         self.download_all_btn.clicked.connect(self.download_all_clicked.emit)
         layout.addWidget(self.download_all_btn)
+
+    def set_theme(self, mode: ThemeMode | str) -> None:
+        self._palette = palette_for(mode)
+        self.update()
 
     def set_empty(self) -> None:
         self._state = "empty"
@@ -78,23 +81,43 @@ class OutputSlot(QWidget):
         self.download_all_btn.setEnabled(enabled)
 
     def paintEvent(self, event) -> None:  # noqa: N802
+        pal = self._palette
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
         w = self.width()
-        # Slot above buttons (~ leave room for two buttons)
-        slot_h = min(100, self.height() - 90)
+        slot_h = min(110, self.height() - 90)
         slot = QRectF(12, 8, w - 24, slot_h)
 
-        # Outer frame
-        painter.setPen(QPen(QColor(EMBER if self._state == "ready" else STEEL), 2))
-        painter.setBrush(QColor(0, 0, 0, 60))
+        # Frame with metal bevel
+        border_col = (
+            pal.glow
+            if self._state == "ready"
+            else (pal.error if self._state == "error" else pal.metal_mid)
+        )
+        frame_grad = QLinearGradient(slot.topLeft(), slot.bottomRight())
+        frame_grad.setColorAt(0.0, QColor(pal.metal_mid))
+        frame_grad.setColorAt(1.0, QColor(pal.metal_dark))
+        painter.setPen(QPen(QColor(border_col), 2))
+        painter.setBrush(frame_grad)
         painter.drawRoundedRect(slot, 8, 8)
 
-        title_font = QFont()
-        title_font.setPointSize(9)
-        painter.setFont(title_font)
-        painter.setPen(QColor(ASH))
+        # Inner cavity
+        inner = slot.adjusted(5, 5, -5, -5)
+        painter.setPen(QPen(QColor(pal.metal_edge), 1))
+        painter.setBrush(QColor(pal.slot_fill))
+        painter.drawRoundedRect(inner, 5, 5)
+
+        # Glow ring when ready
+        if self._state == "ready":
+            painter.setPen(QPen(QColor(pal.glow), 1))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRoundedRect(slot.adjusted(-1, -1, 1, 1), 9, 9)
+
+        painter.setPen(QColor(pal.text_dim))
+        font = QFont()
+        font.setPointSize(9)
+        painter.setFont(font)
         painter.drawText(
             QRectF(0, slot.bottom() + 2, w, 14),
             Qt.AlignmentFlag.AlignHCenter,
@@ -102,14 +125,14 @@ class OutputSlot(QWidget):
         )
 
         if self._state == "empty":
-            painter.setPen(QColor(ASH))
-            painter.drawText(slot, Qt.AlignmentFlag.AlignCenter, "—")
+            painter.setPen(QColor(pal.text_dim))
+            painter.drawText(inner, Qt.AlignmentFlag.AlignCenter, "—")
         elif self._state == "ready":
-            self._draw_item(painter, slot, cracked=False)
+            self._draw_item(painter, inner, cracked=False)
         elif self._state == "error":
-            self._draw_item(painter, slot, cracked=True)
+            self._draw_item(painter, inner, cracked=True)
         elif self._state == "downloaded":
-            self._draw_item(painter, slot, cracked=False, check=True)
+            self._draw_item(painter, inner, cracked=False, check=True)
 
         painter.end()
 
@@ -121,13 +144,18 @@ class OutputSlot(QWidget):
         cracked: bool,
         check: bool = False,
     ) -> None:
-        icon = slot.adjusted(20, 12, -20, -28)
+        pal = self._palette
+        icon = slot.adjusted(14, 10, -14, -24)
         if cracked:
-            painter.setBrush(QColor(ERROR))
+            base = QColor(pal.error)
         elif check:
-            painter.setBrush(QColor(SUCCESS))
+            base = QColor(pal.success)
         else:
-            painter.setBrush(QColor(SPARK))
+            base = QColor(pal.ember)
+        grad = QLinearGradient(icon.topLeft(), icon.bottomRight())
+        grad.setColorAt(0.0, base.lighter(125))
+        grad.setColorAt(1.0, base.darker(115))
+        painter.setBrush(grad)
         painter.setPen(Qt.PenStyle.NoPen)
         painter.drawRoundedRect(icon, 6, 6)
 
@@ -145,7 +173,6 @@ class OutputSlot(QWidget):
         painter.drawText(icon, Qt.AlignmentFlag.AlignCenter, text)
 
         if cracked:
-            # Crack lines
             painter.setPen(QPen(QColor("#111"), 2))
             painter.drawLine(
                 int(icon.left() + 8),
@@ -160,10 +187,13 @@ class OutputSlot(QWidget):
                 int(icon.bottom() - 6),
             )
 
-        painter.setPen(QColor("#F0E6D8"))
+        painter.setPen(QColor(pal.text))
         font.setPointSize(8)
         font.setBold(False)
         painter.setFont(font)
         name = self._label if len(self._label) <= 18 else self._label[:15] + "…"
-        name_rect = QRectF(slot.x(), icon.bottom() + 2, slot.width(), 14)
-        painter.drawText(name_rect, Qt.AlignmentFlag.AlignCenter, name)
+        painter.drawText(
+            QRectF(slot.x(), icon.bottom() + 2, slot.width(), 14),
+            Qt.AlignmentFlag.AlignCenter,
+            name,
+        )
