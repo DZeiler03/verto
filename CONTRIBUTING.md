@@ -17,7 +17,7 @@ python3 -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 pytest
-python -m main
+python -m main              # from repo root with PYTHONPATH=src, or:
 PYTHONPATH=src python src/main.py
 ```
 
