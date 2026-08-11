@@ -1,7 +1,12 @@
-"""FileForge visual theme — forge (dark) and daylight (light) stylesheets."""
+"""FileForge visual theme — palettes, stylesheets, scene colors.
+
+Supports dark *Forge* and light *Daylight smithy* modes. Custom-painted widgets
+use :func:`palette_for` so glows and metals track the active theme.
+"""
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from enum import Enum
 
 
@@ -10,7 +15,7 @@ class ThemeMode(str, Enum):
     DAYLIGHT = "daylight"
 
 
-# Palette
+# Legacy string constants (QSS + backwards compat)
 EMBER = "#E85D04"
 EMBER_GLOW = "#F48C06"
 COAL = "#121212"
@@ -28,8 +33,110 @@ DAYLIGHT_PANEL = "#FFFCF7"
 DAYLIGHT_BORDER = "#C4B8A8"
 
 
+@dataclass(frozen=True)
+class ScenePalette:
+    """Colors for custom-painted FileForge scene widgets."""
+
+    # Room
+    bg: str
+    bg_mid: str
+    floor: str
+    wall: str
+    # Metal
+    metal_dark: str
+    metal_mid: str
+    metal_light: str
+    metal_edge: str
+    # Warm light / fire
+    glow: str
+    glow_soft: str
+    flame_core: str
+    flame_mid: str
+    flame_edge: str
+    ember: str
+    # UI paint
+    text: str
+    text_dim: str
+    ash: str
+    slot_fill: str
+    panel: str
+    wood: str
+    stone: str
+    success: str
+    error: str
+    accent: str
+
+
+def _norm_mode(mode: ThemeMode | str) -> ThemeMode:
+    if isinstance(mode, ThemeMode):
+        return mode
+    try:
+        return ThemeMode(str(mode))
+    except ValueError:
+        return ThemeMode.FORGE
+
+
+def palette_for(mode: ThemeMode | str) -> ScenePalette:
+    """Return the scene paint palette for the given theme mode."""
+    mode = _norm_mode(mode)
+    if mode == ThemeMode.DAYLIGHT:
+        return ScenePalette(
+            bg=DAYLIGHT_BG,
+            bg_mid="#EDE4D4",
+            floor="#D4C4A8",
+            wall="#E8DFD0",
+            metal_dark="#4A4A52",
+            metal_mid="#7A7A85",
+            metal_light="#B0B0BB",
+            metal_edge="#2A2A30",
+            glow="#E85D04",
+            glow_soft="#F4A261",
+            flame_core="#FFE566",
+            flame_mid="#F48C06",
+            flame_edge="#E85D04",
+            ember="#FFBA08",
+            text=DAYLIGHT_FG,
+            text_dim="#5A5348",
+            ash="#8A8070",
+            slot_fill="#00000028",
+            panel=DAYLIGHT_PANEL,
+            wood="#A67C52",
+            stone="#C4B8A8",
+            success=SUCCESS,
+            error=ERROR,
+            accent=EMBER,
+        )
+    # Dark forge
+    return ScenePalette(
+        bg=COAL,
+        bg_mid="#1A1410",
+        floor="#0E0C0A",
+        wall="#181410",
+        metal_dark="#1A1A1C",
+        metal_mid="#3A3A42",
+        metal_light="#8A8A95",
+        metal_edge="#0A0A0C",
+        glow=EMBER_GLOW,
+        glow_soft="#E85D0480",
+        flame_core="#FFF3A0",
+        flame_mid="#FF9F1C",
+        flame_edge="#E85D04",
+        ember=SPARK,
+        text="#F0E6D8",
+        text_dim=ASH,
+        ash=ASH,
+        slot_fill="#00000066",
+        panel=IRON,
+        wood="#5D4037",
+        stone="#2B2520",
+        success=SUCCESS,
+        error=ERROR,
+        accent=EMBER,
+    )
+
+
 def stylesheet(mode: ThemeMode | str) -> str:
-    mode = ThemeMode(mode) if not isinstance(mode, ThemeMode) else mode
+    mode = _norm_mode(mode)
     if mode == ThemeMode.DAYLIGHT:
         return _daylight_qss()
     return _forge_qss()
@@ -44,6 +151,11 @@ def _forge_qss() -> str:
     QWidget#centralRoot {{
         background-color: {COAL};
         color: #F0E6D8;
+    }}
+    QWidget#forgeScene {{
+        background: transparent;
+        border: 1px solid #2A2218;
+        border-radius: 10px;
     }}
     QLabel {{
         color: #F0E6D8;
@@ -66,12 +178,13 @@ def _forge_qss() -> str:
         background-color: {IRON};
         color: #F0E6D8;
         border: 1px solid {EMBER};
-        border-radius: 4px;
+        border-radius: 6px;
         padding: 6px 10px;
         min-height: 28px;
     }}
     QComboBox:hover {{
         border-color: {SPARK};
+        background-color: #282828;
     }}
     QComboBox::drop-down {{
         border: none;
@@ -84,14 +197,14 @@ def _forge_qss() -> str:
         border: 1px solid {STEEL};
     }}
     QPushButton {{
-        background-color: {STEEL};
+        background-color: #353535;
         color: #F0E6D8;
-        border: 1px solid {ASH};
-        border-radius: 4px;
+        border: 1px solid #5A5A5A;
+        border-radius: 6px;
         padding: 8px 14px;
     }}
     QPushButton:hover {{
-        background-color: #4A4A4A;
+        background-color: #454545;
         border-color: {EMBER};
     }}
     QPushButton:disabled {{
@@ -106,7 +219,7 @@ def _forge_qss() -> str:
         font-size: 14px;
         border: 1px solid {EMBER_GLOW};
         padding: 10px 20px;
-        border-radius: 6px;
+        border-radius: 8px;
     }}
     QPushButton#forgeButton:hover {{
         background-color: {EMBER_GLOW};
@@ -120,6 +233,7 @@ def _forge_qss() -> str:
         color: white;
         border: 1px solid {SUCCESS};
         font-weight: bold;
+        border-radius: 6px;
     }}
     QPushButton#downloadButton:hover {{
         background-color: #3A7A3A;
@@ -186,6 +300,11 @@ def _daylight_qss() -> str:
         background-color: {DAYLIGHT_BG};
         color: {DAYLIGHT_FG};
     }}
+    QWidget#forgeScene {{
+        background: transparent;
+        border: 1px solid {DAYLIGHT_BORDER};
+        border-radius: 10px;
+    }}
     QLabel {{
         color: {DAYLIGHT_FG};
         background: transparent;
@@ -207,7 +326,7 @@ def _daylight_qss() -> str:
         background-color: {DAYLIGHT_PANEL};
         color: {DAYLIGHT_FG};
         border: 1px solid {DAYLIGHT_BORDER};
-        border-radius: 4px;
+        border-radius: 6px;
         padding: 6px 10px;
         min-height: 28px;
     }}
@@ -224,7 +343,7 @@ def _daylight_qss() -> str:
         background-color: {DAYLIGHT_PANEL};
         color: {DAYLIGHT_FG};
         border: 1px solid {DAYLIGHT_BORDER};
-        border-radius: 4px;
+        border-radius: 6px;
         padding: 8px 14px;
     }}
     QPushButton:hover {{
@@ -242,7 +361,7 @@ def _daylight_qss() -> str:
         font-size: 14px;
         border: 1px solid {EMBER};
         padding: 10px 20px;
-        border-radius: 6px;
+        border-radius: 8px;
     }}
     QPushButton#forgeButton:hover {{
         background-color: {EMBER_GLOW};
@@ -252,6 +371,7 @@ def _daylight_qss() -> str:
         color: white;
         border: 1px solid #388E3C;
         font-weight: bold;
+        border-radius: 6px;
     }}
     QPushButton#downloadButton:disabled {{
         background-color: #CCC;
