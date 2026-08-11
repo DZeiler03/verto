@@ -63,6 +63,7 @@ def downloads_dir() -> Path:
             candidate = Path(userprofile) / "Downloads"
             if candidate.is_dir():
                 return candidate
+    # XDG user-dirs (Linux) and common defaults
     xdg_download = os.environ.get("XDG_DOWNLOAD_DIR")
     if xdg_download:
         p = Path(xdg_download).expanduser()
@@ -72,6 +73,7 @@ def downloads_dir() -> Path:
         candidate = _home() / name
         if candidate.is_dir():
             return candidate
+    # Fallback: home
     return _home()
 
 
@@ -79,11 +81,13 @@ def default_output_path(source: Path, target_ext: str) -> Path:
     """Suggest an output path in Downloads (or next to source if Downloads fails)."""
     ext = target_ext if target_ext.startswith(".") else f".{target_ext}"
     stem = source.stem
+    # Avoid double extensions like file.pdf.png when stem already clean
     name = f"{stem}{ext.lower()}"
     dest_dir = downloads_dir()
     candidate = dest_dir / name
     if not candidate.exists():
         return candidate
+    # Disambiguate
     n = 1
     while True:
         candidate = dest_dir / f"{stem}_{n}{ext.lower()}"
