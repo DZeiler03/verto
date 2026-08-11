@@ -1,14 +1,16 @@
 """FileForge — Verto's blacksmith-forge visual theme.
 
-The entire UI is themed as a blacksmith's forge: anvil input slot, hammer-strike
-animation synced to Morphix jobs, output slot for forged results, and an
-inventory-style forge queue. Cosmetic sugar only — status and errors stay visible.
+Atmospheric 2D smithy: forge oven with flame animation, metallic anvil, hammer
+strike, output slot, and inventory-style queue. Cosmetic layer only — status
+and errors stay clearly visible.
 """
 
 from ui.fileforge.anvil import AnvilWidget
 from ui.fileforge.hammer import HammerOverlay
 from ui.fileforge.output_slot import OutputSlot
+from ui.fileforge.oven import ForgeOvenWidget
 from ui.fileforge.queue_row import ForgeQueueRow
+from ui.fileforge.scene import ForgeSceneWidget
 from ui.fileforge.theme import (
     COAL,
     DAYLIGHT_BG,
@@ -17,7 +19,9 @@ from ui.fileforge.theme import (
     IRON,
     SPARK,
     STEEL,
+    ScenePalette,
     ThemeMode,
+    palette_for,
     stylesheet,
 )
 
@@ -25,8 +29,12 @@ __all__ = [
     "AnvilWidget",
     "HammerOverlay",
     "OutputSlot",
+    "ForgeOvenWidget",
     "ForgeQueueRow",
+    "ForgeSceneWidget",
     "ThemeMode",
+    "ScenePalette",
+    "palette_for",
     "stylesheet",
     "EMBER",
     "COAL",
