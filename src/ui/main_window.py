@@ -28,7 +28,9 @@ from morphix.base import GOOGLE_POINTER_MESSAGE, output_extension
 from morphix.engine import MorphixEngine
 from ui.fileforge import (
     AnvilWidget,
+    ForgeOvenWidget,
     ForgeQueueRow,
+    ForgeSceneWidget,
     HammerOverlay,
     OutputSlot,
     ThemeMode,
@@ -70,7 +72,7 @@ class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("Verto")
-        self.resize(860, 640)
+        self.resize(960, 700)
 
         self.settings: AppSettings = load_settings()
         self.engine = MorphixEngine()
@@ -148,25 +150,25 @@ class MainWindow(QMainWindow):
         root.addWidget(title)
         root.addWidget(subtitle)
 
-        # Forge floor: anvil + hammer overlay + format + output
-        forge_row = QHBoxLayout()
-        forge_row.setSpacing(16)
+        # Atmospheric forge floor: oven | anvil+hammer | controls | output
+        self.scene = ForgeSceneWidget()
+        self.oven = ForgeOvenWidget()
+        self.scene.row.addWidget(self.oven)
 
         anvil_wrap = QWidget()
         anvil_layout = QVBoxLayout(anvil_wrap)
         anvil_layout.setContentsMargins(0, 0, 0, 0)
         self.anvil = AnvilWidget()
         self.anvil.files_dropped.connect(self._on_files_dropped)
-        self.anvil.clicked.connect(lambda: None)  # browse via empty drop signal
+        self.anvil.clicked.connect(lambda: None)
         anvil_layout.addWidget(self.anvil)
-
-        # Hammer overlay parented to anvil wrap, sized over anvil
         self.hammer = HammerOverlay(anvil_wrap)
         self.anvil.installEventFilter(self)
+        self.scene.row.addWidget(anvil_wrap, stretch=2)
 
-        forge_row.addWidget(anvil_wrap, stretch=2)
-
-        mid = QVBoxLayout()
+        mid_host = QWidget()
+        mid = QVBoxLayout(mid_host)
+        mid.setContentsMargins(0, 0, 0, 0)
         mid.addStretch()
         fmt_label = QLabel("Target format")
         fmt_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -184,29 +186,27 @@ class MainWindow(QMainWindow):
         self.cancel_btn.clicked.connect(self._cancel_forging)
         mid.addWidget(self.cancel_btn)
         mid.addStretch()
-        forge_row.addLayout(mid)
+        self.scene.row.addWidget(mid_host)
 
         self.output_slot = OutputSlot()
         self.output_slot.download_clicked.connect(self._download_active)
         self.output_slot.download_all_clicked.connect(self._download_all)
-        forge_row.addWidget(self.output_slot)
+        self.scene.row.addWidget(self.output_slot)
 
-        root.addLayout(forge_row)
+        root.addWidget(self.scene, stretch=1)
 
-        # Status detail always visible
+        # Status detail always visible under the scene chrome
         self.detail_label = QLabel("Ready — drop a file on the anvil to begin")
         self.detail_label.setObjectName("statusDetail")
         self.detail_label.setWordWrap(True)
         root.addWidget(self.detail_label)
 
-        # Forge queue inventory row
         queue_label = QLabel("Forge queue")
         root.addWidget(queue_label)
         self.queue_row = ForgeQueueRow()
         self.queue_row.item_selected.connect(self._on_queue_item_selected)
         root.addWidget(self.queue_row)
 
-        # Bottom actions
         btn_row = QHBoxLayout()
         self.add_btn = QPushButton("Add files…")
         self.add_btn.clicked.connect(self._browse_files)
@@ -227,7 +227,6 @@ class MainWindow(QMainWindow):
         self.setStatusBar(self.status)
 
     def eventFilter(self, obj, event):  # noqa: N802
-        # Keep hammer overlay geometry aligned with anvil
         if obj is self.anvil:
             from PySide6.QtCore import QEvent
 
@@ -244,6 +243,17 @@ class MainWindow(QMainWindow):
         if app:
             app.setStyleSheet(stylesheet(mode))
         self.settings.theme = mode
+        # Propagate palette to all custom-painted FileForge widgets
+        for widget in (
+            getattr(self, "scene", None),
+            getattr(self, "oven", None),
+            getattr(self, "anvil", None),
+            getattr(self, "hammer", None),
+            getattr(self, "output_slot", None),
+            getattr(self, "queue_row", None),
+        ):
+            if widget is not None and hasattr(widget, "set_theme"):
+                widget.set_theme(mode)
 
     def _set_theme(self, mode: str) -> None:
         self.apply_theme(mode)
@@ -380,6 +390,8 @@ class MainWindow(QMainWindow):
 
         self._set_busy(True)
         self.anvil.set_forging(True)
+        self.oven.set_forging(True)
+        self.scene.set_forging(True)
         self.hammer.setGeometry(self.anvil.geometry())
         self.hammer.start_loop()
         self._update_detail("Forging… Morphix is converting in the background")
@@ -447,6 +459,8 @@ class MainWindow(QMainWindow):
         success = done > 0 and errors == 0
         self.hammer.stop_with_finale(success=done > 0)
         self.anvil.set_forging(False)
+        self.oven.set_forging(False)
+        self.scene.set_forging(False)
         self._set_busy(False)
 
         # Keep sources that failed so user can retry; clear successful sources
@@ -597,6 +611,9 @@ class MainWindow(QMainWindow):
         self.queue = ConversionQueue(self.engine)
         self.queue_row.clear()
         self.anvil.clear()
+        self.anvil.set_forging(False)
+        self.oven.set_forging(False)
+        self.scene.set_forging(False)
         self.output_slot.set_empty()
         self.output_slot.set_download_all_enabled(False)
         self.format_combo.clear()
